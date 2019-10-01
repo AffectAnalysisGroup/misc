@@ -6,7 +6,7 @@ video_dir = os.path.join(root_dir, 'Video_Data/CameraA/converted')
 stop_construct_path = os.path.join(root_dir, 'LIFE Coding Stop Frame Constructs/Reliability testing/TXT Files')
 
 ann_files = os.listdir(stop_construct_path)
-_header = ['frame number', 82, 83, 84, 85]
+_header = [0, 82, 83, 84, 85]
 
 vid_files_org = [file.split('_') for file in os.listdir(video_dir)]
 vid_files = [file[0]+'_'+file[1] if len(file)>2 else None for file in vid_files_org]
@@ -51,14 +51,14 @@ for file in ann_files:
 			csvwriter.writerow(row)
 		else:
 			for i in range(1, row[0]-idx):
-				csvwriter.writerow([idx+i, prev[1], prev[2], prev[3], prev[4]]) # frame-level annotation
-				# csvwriter.writerow([idx+i, 0, 0, 0, 0]) # only onset annotation
+				# csvwriter.writerow([idx+i, prev[1], prev[2], prev[3], prev[4]]) # frame-level annotation
+				csvwriter.writerow([idx+i, 0, 0, 0, 0]) # only onset annotation
 			csvwriter.writerow(row)
 		idx = row[0]
 		prev = row
 	for i in range(1, int(_num_frames)-row[0]+1):
-		csvwriter.writerow([row[0]+i, row[1], row[2], row[3], row[4]]) # frame-level annotation
-		# csvwriter.writerow([row[0]+i, 0, 0, 0, 0]) # only onset annotation
+		# csvwriter.writerow([row[0]+i, row[1], row[2], row[3], row[4]]) # frame-level annotation
+		csvwriter.writerow([row[0]+i, 0, 0, 0, 0]) # only onset annotation
 	fp.close()
 	print(file, _num_frames)
 	# break
