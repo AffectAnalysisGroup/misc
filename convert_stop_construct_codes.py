@@ -1,11 +1,12 @@
 import cv2
-import os, csv
+import os, csv, pdb
 import numpy as np
 from numpy import genfromtxt
+# import matplotlib.plyplot as plt
 
 root_dir = '/run/user/1435715183/gvfs/smb-share:server=istanbul.psychology.pitt.edu,share=raw_data/TPOT'
 video_dir = os.path.join(root_dir, 'Video_Data/CameraA/converted')
-stop_construct_path = os.path.join(root_dir, 'LIFE Coding Stop Frame Constructs/Reliability testing/TXT Files')
+stop_construct_path = os.path.join(root_dir, 'LIFE', 'LIFE Coding Stop Frame Constructs/Reliability testing/TXT Files')
 ind_csv_path = os.path.abspath('independent_annotations')
 win_csv_path = os.path.abspath('windowed_annotations')
 
@@ -17,7 +18,7 @@ vid_files = [file[0]+'_'+file[1] if len(file)>2 else None for file in vid_files_
 root_name = []
 frame_rates = []
 nframes = []
-agreement = False
+agreement = True
 
 def generate_csvs(ann_files):
 
@@ -85,8 +86,14 @@ def generate_csvs(ann_files):
 def generate_csvs_windowed(nsecs):
 
 	print('comparison')
+	disagreement_prop = [[], []]
+	conf_matrix = np.zeros((2, 4,4))
+
 	for fid, filename in enumerate(root_name):
+		print('-'*20)
 		print(filename)
+		print('-'*20)
+
 		nsec_frames = frame_rates[fid] * nsecs
 
 		csv_file1 = os.path.join(ind_csv_path, filename + '_CB45_BO_CM.csv')
@@ -101,7 +108,7 @@ def generate_csvs_windowed(nsecs):
 
 		del_frame1 = []
 		del_frame2 = []
-		for fid, frame in enumerate(rating_pos1):
+		for frame in rating_pos1:
 			_diff = np.abs(rating_pos2 - frame)
 			_construct = np.where(ann1[frame, 1:]==1)
 			if len(np.where(_diff<nsec_frames)[0]) == 0:
@@ -109,52 +116,81 @@ def generate_csvs_windowed(nsecs):
 			else:
 				if agreement:
 					win_frames = np.where(_diff < nsec_frames)
-					if np.sum(ann2[rating_pos2[win_frames]], axis=0)[_construct] < 1:
+					conf_matrix[0, _construct, np.where(ann2[rating_pos2[win_frames], 1:]==1)[1]] += 1
+					if np.sum(ann2[rating_pos2[win_frames], 1:], axis=0)[_construct] < 1:
 						del_frame1.append(frame)
 
-		print('deleting {0} annotated frames, total-{1} annotated frames'.format(len(del_frame1), len(rating_pos1)))
+		# print('deleting {0} annotated frames, total-{1} annotated frames'.format(len(del_frame1), len(rating_pos1)))
 
-		for fid, frame in enumerate(rating_pos2):
+		for frame in rating_pos2:
 			_diff = np.abs(rating_pos1 - frame)
 			_construct = np.where(ann2[frame, 1:]==1)
 			if len(np.where(_diff<nsec_frames)[0]) == 0:
-				# if agreement:
-				# 	win_frames = np.where(_diff<nsec_frames)
-				# 	if np.sum(ann2[win_frames], axis=0)[_construct] < 1:
 				del_frame2.append(frame)
 			else:
 				if agreement:
 					win_frames = np.where(_diff < nsec_frames)
-					if np.sum(ann1[rating_pos1[win_frames]], axis=0)[_construct] < 1:
+					conf_matrix[1, _construct, np.where(ann1[rating_pos1[win_frames], 1:]==1)[1]] += 1
+					if np.sum(ann1[rating_pos1[win_frames], 1:], axis=0)[_construct] < 1:
 						del_frame2.append(frame)
-		print('deleting {0} annotated frames, total-{1} annotated frames'.format(len(del_frame2), len(rating_pos2)))
+		# print('deleting {0} annotated frames, total-{1} annotated frames'.format(len(del_frame2), len(rating_pos2)))
 
 		ann1[del_frame1, 1:] = [0, 0, 0, 0]
 		ann2[del_frame2, 1:] = [0, 0, 0, 0]
 
-		with open(os.path.join(win_csv_path, filename + '_CB45_BO_CM.csv'), 'w') as fp:
+		disagreement_prop[0].append(len(del_frame1)/len(rating_pos1)) # disagreement of CM with KH
+		disagreement_prop[1].append(len(del_frame2)/len(rating_pos2)) # disagreement of KH with CM
+
+		print('disagreement of CM with KH-{0:.4f}'.format(disagreement_prop[0][fid]))
+		print('disagreement of KH with CM-{0:.4f}'.format(disagreement_prop[1][fid]))
+
+
+		# conf_matrix[0, ...] = np.divide(conf_matrix[0, ...], np.sum(conf_matrix[0, ...], axis=1).T+1e-8)
+		# conf_matrix[1, ...] = np.divide(conf_matrix[1, ...], np.sum(conf_matrix[1, ...], axis=1).T+1e-8)
+
+		# print(del_frame1)
+		# print(del_frame2)
+
+		with open(os.path.join(win_csv_path, 'agreement/2sec', filename + '_CB45_BO_CM.csv'), 'w') as fp:
 			csvwriter = csv.writer(fp)
 			csvwriter.writerow(_header)
 			for row in ann1:
 				csvwriter.writerow([int(row[0]), int(row[1]), int(row[2]), int(row[3]), int(row[4])])
 
-		with open(os.path.join(win_csv_path, filename + '_DB45_BO_KH.csv'), 'w') as fp:
+		with open(os.path.join(win_csv_path, 'agreement/2sec', filename + '_DB45_BO_KH.csv'), 'w') as fp:
 			csvwriter = csv.writer(fp)
 			csvwriter.writerow(_header)
 			for row in ann2:
 				csvwriter.writerow([int(row[0]), int(row[1]), int(row[2]), int(row[3]), int(row[4])])
 
-
-		# np.savetxt(os.path.join(win_csv_path, filename + '_CB45_BO_CM.csv'), ann1.astype(int), delimiter=',', header = '0, 80, 81,82,83')
-		# np.savetxt(os.path.join(win_csv_path, filename+'_DB45_BO_KH.csv'), ann2.astype(int), delimiter=',', header = '0, 80, 81,82,83')
-
+	print('confusion matrix-{0}'.format(conf_matrix.astype(np.float16)))
 		# break
 
-	return
+	return disagreement_prop
 
 if __name__ == '__main__':
 	generate_csvs(ann_files)
 	root_name = list(dict.fromkeys(root_name))
-	generate_csvs_windowed(5)
+	win_len = 1
+
+	hist = []
+	wins = []
+	bar_width = 0.35
+	# plt.subplots()
+
+	generate_csvs_windowed(2)
+
+	# for wid, win_len in enumerate(np.arange(1, 3, 0.5)):
+	# 	print('-' * 20)
+	# 	print('window duration-{0:.4f} sec'.format(win_len))
+	# 	print('-' * 20)
+	# 	hist.append(generate_csvs_windowed(win_len))
+	# 	wins.append(win_len)
+
+	# 	plt.bar(np.arange(len(wins)), hist[wid][0], color='b', label='CM wrt KH')
+	# 	plt.bar(np.arange(len(wins))+bar_width, hist[wid][1], color='b', label='KH wrt CM')
+    #
+	# plt.legend()
+	# plt.show()
 
 
