@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import pandas as pd
 from sklearn.metrics import cohen_kappa_score
+import scipy.io as sio
 
 # from convert_stop_construct_codes import closest_prev_construct, compare_windows
 
@@ -219,6 +220,8 @@ if __name__ == '__main__':
                       .format(np.nanmin(kappa, axis=0), np.nanmean(kappa, axis=0), np.nanmax(kappa, axis=0), np.nanstd(kappa, axis=0)))
                 # input('enter')
 
+                # sio.savemat('emo_'+char+'_kappa'+str(window_len), kappa)
+                np.savez('emo_'+char+'_kappa'+str(window_len), kappa)
 
             if folder == "Triad" and TRIAD == True:
                 print(char, '\n', os.listdir(os.path.join(LIFE_path, folder, 'window_' + str(WINDOW) + 'sec', char)))
