@@ -1,2 +1,6 @@
 *.csv
 *.xlsx
+*.npz
+*.mat
+
+__pycache__/

@@ -2,7 +2,7 @@ import os, pdb
 import cv2
 import numpy as np
 import pandas as pd
-from sklearn.metrics import cohen_kappa_score
+from sklearn.metrics import roc_auc_score
 import scipy.io as sio
 
 # from convert_stop_construct_codes import closest_prev_construct, compare_windows
@@ -25,7 +25,8 @@ agreement = True
 
 annotators = {'CH': 0, 'CO': 1, 'MZ': 2, 'MN': 3}
 conf_matrix = np.zeros((4, 4, 4, 4), dtype=np.int64)
-
+score = np.zeros((2, 4))  # constructs x annotators x annotators
+ann = np.array((1, 4))
 
 def closest_prev_construct(frame, rating_pos, ref_array, nsec_frames):
     _diff = frame - rating_pos
@@ -130,6 +131,12 @@ def calculate_conf_matrix(csv_path, filename1, filename2, frame_rate, annotator1
     ann1[del_frame1, 1:] = [0, 0, 0, 0]
     ann2[del_frame2, 1:] = [0, 0, 0, 0]
 
+    # assert ann1.shape == ann2.shape # seems like some error in the EMO csv files
+
+    max_frames = min(ann1.shape[0], ann2.shape[0]) # due to the above issue in the csvs
+    ann1 = ann1[:max_frames, ...]
+    ann2 = ann2[:max_frames, ...]
+
     disagreement_prop[0].append(len(del_frame1) / len(rating_pos1))  # disagreement of CM with KH
     disagreement_prop[1].append(len(del_frame2) / len(rating_pos2))  # disagreement of KH with CM
 
@@ -139,7 +146,7 @@ def calculate_conf_matrix(csv_path, filename1, filename2, frame_rate, annotator1
 
     # print('confusion matrix \n {0} \n {1}'.format(conf_matrix[annotator1_id, annotator2_id].astype(np.int64), conf_matrix[annotator2_id, annotator1_id].astype(np.int64)))
 
-    return disagreement_prop
+    return disagreement_prop, ann1, ann2
 
 def calculate_kappa(conf_matrix):
 
@@ -175,6 +182,38 @@ def calculate_kappa(conf_matrix):
 
     return kappa
 
+def cal_2afc(ann1, ann2):
+
+    for _construct in range(4):
+        for pair in range(2):
+            if pair == 0:
+                gt = ann1[:, 1+_construct]
+                pred = ann2[:, 1+_construct]
+            else:
+                gt = ann2[:, 1+_construct]
+                pred = ann1[:, 1+_construct]
+
+            ndxPos = np.where(gt==1)[0]
+            ndxNeg = np.where(gt==0)[0]
+
+            v = 0
+
+            for i in range(0, len(ndxPos)):
+                if len(np.where(pred[ndxNeg]<pred[ndxPos[i]])[0]) > 0:
+                    v += len(np.where(pred[ndxNeg]<pred[ndxPos[i]])[0])
+                elif len(np.where(pred[ndxNeg] == pred[ndxPos[i]])[0]) > 0:
+                    v += 0.5*len(np.where(pred[ndxNeg] == pred[ndxPos[i]])[0])
+                # for j in range(0, len(ndxNeg)):
+                #     if pred[ndxPos[i]] > pred[ndxNeg[j]]:
+                #         v += 1
+                #     elif pred[ndxPos[i]] == pred[ndxNeg[j]]:
+                #         v += 0.5
+
+            # score[:, ann1, ann2] = roc_auc_score(gt, pred)
+            score[pair, _construct] =  v/(len(ndxNeg)*len(ndxPos))
+
+    return score
+
 if __name__ == '__main__':
 
     finished_videos = []
@@ -205,8 +244,23 @@ if __name__ == '__main__':
                     file_ref = [(x, annotators[x.split('_')[-1].split('.')[0]]) if x.startswith(video_id) else None for x in windowed_csvs]
                     for ref in file_ref:
                         if ref is not None and ref[0] != file and ref[0] not in finished_videos: #  and file.startswith('2143212'):
-                            calculate_conf_matrix(sub_folder, file, ref[0], frame_rate, annotator_id, ref[1], nsecs=window_len)
+                            _, data_array1, data_array2 = calculate_conf_matrix(sub_folder, file, ref[0], frame_rate, annotator_id, ref[1], nsecs=window_len)
                             finished_videos.append(ref[0])
+
+                            if 'all_annotation1' not in locals():
+                                all_annotation1 = data_array1
+                            else:
+                                all_annotation1 = np.append(all_annotation1, data_array1, axis=0)
+
+                            if 'all_annotation2' not in locals():
+                                all_annotation2 = data_array2
+                            else:
+                                all_annotation2 = np.append(all_annotation2, data_array2, axis=0)
+
+                sio.savemat('EMO_afc_data.mat', {'ann1':all_annotation1, 'ann2':all_annotation2})
+
+                # afc_score = cal_2afc(all_annotation1, all_annotation2)
+                # print('afc_score-', afc_score)
 
                 for a in range(conf_matrix.shape[0]):
                     for b in range(conf_matrix.shape[1]):
@@ -215,13 +269,16 @@ if __name__ == '__main__':
                     # break
                 # print('{0} {1}sec conf_matrix-{2} \n '.format(char, WINDOW, conf_matrix))
                 print('{0} {1}sec \n '.format(char, WINDOW, conf_matrix))
-                print(kappa)
+                # print(kappa)
                 print('kappa min-{0} \n mean-{1} \n max-{2} \n std-{3} \n'
                       .format(np.nanmin(kappa, axis=0), np.nanmean(kappa, axis=0), np.nanmax(kappa, axis=0), np.nanstd(kappa, axis=0)))
                 # input('enter')
 
+
+
+                # print(score)
                 # sio.savemat('emo_'+char+'_kappa'+str(window_len), kappa)
-                np.savez('emo_'+char+'_kappa'+str(window_len), kappa)
+                np.savez('emo_'+char+'_2afc'+str(float(window_len)), score)
 
             if folder == "Triad" and TRIAD == True:
                 print(char, '\n', os.listdir(os.path.join(LIFE_path, folder, 'window_' + str(WINDOW) + 'sec', char)))

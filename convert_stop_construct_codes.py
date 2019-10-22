@@ -2,7 +2,7 @@ import cv2
 import os, csv, pdb
 import numpy as np
 from numpy import genfromtxt
-from reliability_emo_onset import calculate_kappa
+from reliability_emo_onset import calculate_kappa, cal_2afc
 
 # import matplotlib.plyplot as plt
 
@@ -14,6 +14,13 @@ win_csv_path = os.path.abspath('windowed_annotations')
 
 # TODO fix this for video convenience
 ann_files = os.listdir(stop_construct_path)#[8:-3]
+
+# TODO uncomment for weekly analysis
+# _ann_files = os.listdir(stop_construct_path)#[8:-3]
+# week_files = ['1011421', '1011422', '1031141','1031142']
+# ann_files = [x if x.split('_')[0] in week_files else None for x in _ann_files]
+# ann_files = list(filter(lambda x:x!=None, ann_files))
+
 _header = [0, 82, 83, 84, 85]
 
 vid_files_org = [file.split('_') for file in os.listdir(video_dir)]
@@ -71,8 +78,8 @@ def generate_csvs(ann_files):
 
     for file in ann_files: # [0:12]:
 
-        if file.startswith('1058421_01'):
-            print('here')
+        # if file.startswith('1058421_01'):
+        #     print('here')
 
         filename = file.split('_')[:-1]
 
@@ -144,9 +151,9 @@ def generate_csvs_windowed(nsecs):
     disagreement_prop = [[], []]
 
     for fid, filename in enumerate(root_name):
-        print('-' * 20)
-        print(filename)
-        print('-' * 20)
+        # print('-' * 20)
+        # print(filename)
+        # print('-' * 20)
 
         nsec_frames = frame_rates[fid] * nsecs
 
@@ -183,6 +190,16 @@ def generate_csvs_windowed(nsecs):
         # print('agreement of CM with KH-{0:.4f}'.format(1 - disagreement_prop[0][fid]))
         # print('agreement of KH with CM-{0:.4f}'.format(1 - disagreement_prop[1][fid]))
 
+        if 'annotator1_all' not in locals():
+            annotator1_all = ann1
+        else:
+            annotator1_all = np.append(annotator1_all, ann1, axis=0)
+
+        if 'annotator2_all' not in locals():
+            annotator2_all = ann2
+        else:
+            annotator2_all = np.append(annotator2_all, ann2, axis=0)
+
     # conf_matrix[0, ...] = np.divide(conf_matrix[0, ...], np.sum(conf_matrix[0, ...], axis=1).T+1e-8)
     # conf_matrix[1, ...] = np.divide(conf_matrix[1, ...], np.sum(conf_matrix[1, ...], axis=1).T+1e-8)
 
@@ -201,7 +218,7 @@ def generate_csvs_windowed(nsecs):
     # 	for row in ann2:
     # 		csvwriter.writerow([int(row[0]), int(row[1]), int(row[2]), int(row[3]), int(row[4])])
 
-    print('confusion matrix \n {0}'.format(conf_matrix.astype(np.float16)))
+    # print('confusion matrix \n {0}'.format(conf_matrix.astype(np.float16)))
     # print('confusion matrix \n {0}'.format(conf_matrix2.astype(np.float16)))
     # break
     kappa = np.zeros((conf_matrix.shape[0], conf_matrix.shape[1], 4))
@@ -212,14 +229,17 @@ def generate_csvs_windowed(nsecs):
         kappa[char, ...] = np.reshape(kappa[char, ...], (-1, 4))
 
         if char == 0:
-            np.savez('./graph_data/tpot/tpot_child_' + str(nsecs), kappa[0, ...])
+            np.savez('./graph_data/tpot/tpot_Child_kappa' + str(float(nsecs)), kappa[0, ...])
         else:
-            np.savez('./graph_data/tpot/tpot_parent_' + str(nsecs), kappa[1, ...])
+            np.savez('./graph_data/tpot/tpot_Parent_kappa' + str(float(nsecs)), kappa[1, ...])
     # break
     # print('{0} {1}sec conf_matrix-{2} \n '.format(char, WINDOW, conf_matrix))
     # print(kappa)
 
-
+    # afc_score = cal_2afc(annotator1_all, annotator2_all)
+    # print('afc score', afc_score)
+    #
+    # del annotator1_all, annotator2_all
 
     print('\n kappa window-{0}secs min-{1} \n \n mean-{2} \n \n max-{3} \n \n std-{4} \n \n'
           .format(nsecs, np.nanmin(kappa, axis=0), np.nanmean(kappa, axis=0), np.nanmax(kappa, axis=0),
@@ -243,10 +263,10 @@ if __name__ == '__main__':
 
     for wid, win_len in enumerate(np.arange(0.5, 3, 0.5)):
         kappa = np.zeros((2,2,4))
-        print('-' * 20)
-        print('window duration-{0:.4f} sec'.format(win_len))
-        print('-' * 20)
-        hist.append(generate_csvs_windowed(win_len))
+        # print('-' * 20)
+        # print('window duration-{0:.4f} sec'.format(win_len))
+        # print('-' * 20)
+        generate_csvs_windowed(win_len)
         wins.append(win_len)
 
 # 	plt.bar(np.arange(len(wins)), hist[wid][0], color='b', label='CM wrt KH')
