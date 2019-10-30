@@ -1,3 +1,4 @@
+from datetime import datetime
 import cv2
 import os, csv, pdb
 import numpy as np
@@ -6,20 +7,25 @@ from reliability_emo_onset import calculate_kappa, cal_2afc
 
 # import matplotlib.plyplot as plt
 
+constructs = ['Aggressive', 'Dysphoric', 'Positive', 'Other']
+
 root_dir = '/run/user/1435715183/gvfs/smb-share:server=istanbul.psychology.pitt.edu,share=raw_data/TPOT'
 video_dir = os.path.join(root_dir, 'Video_Data/CameraA/converted')
-stop_construct_path = os.path.join(root_dir, 'LIFE', 'LIFE Coding Stop Frame Constructs/Reliability testing/TXT Files')
+# stop_construct_path = os.path.join(root_dir, 'LIFE', 'LIFE Coding Stop Frame Constructs/Reliability testing/TXT Files')
+stop_construct_path = os.path.join(root_dir, 'LIFE', 'LIFE Coding Stop Frame Constructs/PSI Task/TXT Files')
 ind_csv_path = os.path.abspath('independent_annotations')
 win_csv_path = os.path.abspath('windowed_annotations')
 
 # TODO fix this for video convenience
-ann_files = os.listdir(stop_construct_path)#[8:-3]
+# ann_files = os.listdir(stop_construct_path)#[8:-3]
 
 # TODO uncomment for weekly analysis
-# _ann_files = os.listdir(stop_construct_path)#[8:-3]
-# week_files = ['1011421', '1011422', '1031141','1031142']
-# ann_files = [x if x.split('_')[0] in week_files else None for x in _ann_files]
-# ann_files = list(filter(lambda x:x!=None, ann_files))
+_ann_files = os.listdir(stop_construct_path)#[8:-3]
+week_files = ['1020862', '1007091', '1007092', '1028622']
+ann_files = [x if x.split('_')[0] in week_files else None for x in _ann_files]
+ann_files = list(filter(lambda x:x!=None, ann_files))
+fp_weekly = open('TPOT_weekly_report_'+datetime.today().strftime('%Y_%m_%d')+'.csv', 'w')
+weekly_csvwriter = csv.writer(fp_weekly)
 
 _header = [0, 82, 83, 84, 85]
 
@@ -76,45 +82,43 @@ def compare_windows(curr_rating_pos, ref_rating_pos, curr_ann, ref_ann, conf_mat
 
 def generate_csvs(ann_files):
 
-    for file in ann_files: # [0:12]:
-
-        # if file.startswith('1058421_01'):
-        #     print('here')
+    for file in ann_files:
 
         filename = file.split('_')[:-1]
-
         root_name.append(filename[0] + '_' + filename[1])
         _vid_file = vid_files_org[vid_files.index(filename[0][2:] + '_' + filename[1])]
         vid_file = _vid_file[0]
+
         for ele in _vid_file[1:]:
             vid_file = vid_file + '_' + ele
         if file.endswith('CM.txt'):
-            csv_fp = open(os.path.join(ind_csv_path, filename[0] + '_' + filename[1] + '_CB45_BO_CM.csv'), 'w')
-        # print(filename[0]+'_'+filename[1] + '_CB45_BO_CM.csv')
+            csv_fp = open(os.path.join(ind_csv_path, filename[0] + '_' + filename[1] + '_CM.csv'), 'w')
         else:
-            csv_fp = open(os.path.join(ind_csv_path, filename[0] + '_' + filename[1] + '_DB45_BO_KH.csv'), 'w')
-        # print(filename[0] + '_' + filename[1] + '_DB45_BO_KH.csv')
+            csv_fp = open(os.path.join(ind_csv_path, filename[0] + '_' + filename[1] + '_KH.csv'), 'w')
+
         csvwriter = csv.writer(csv_fp)
         csvwriter.writerow(_header)
-        # with open(os.path.join(video_dir, vid_file), 'r') as fp:
         vcap = cv2.VideoCapture()
         _ret = vcap.open(os.path.join(video_dir, vid_file))
+
         if _ret:
             vcap.set(cv2.CAP_PROP_POS_AVI_RATIO, 1)
             _dur = vcap.get(cv2.CAP_PROP_POS_MSEC)/1e3
 
-            # _fps = vcap.get(cv2.CAP_PROP_FPS)
-            _fps = 29.97
+            _fps = vcap.get(cv2.CAP_PROP_FPS)
+            if _fps > 60:
+                _fps = 29.97 # default value
             frame_rates.append(_fps)
             _num_frames  = _fps * _dur
             # _num_frames = vcap.get(cv2.CAP_PROP_FRAME_COUNT)
             # _num_frames = _fps*_dur*0.001#vcap.get(cv2.CAP_PROP_FRAME_COUNT)
             nframes.append(_num_frames)
+
         _data = []
+
         with open(os.path.join(stop_construct_path, file), 'r') as fp:
             for line in fp:
                 _data.append(line.split('\t'))
-        # _time.append(_data[-1][-2]*_fps)
         _data.sort(key=lambda _sample: _sample[-2])
         data = [[int(float(timestamp) * _fps), 1, 0, 0, 0] if construct.lower() == 'aggressive' else [
             int(float(timestamp) * _fps), 0, 1, 0, 0]
@@ -138,34 +142,26 @@ def generate_csvs(ann_files):
             # csvwriter.writerow([row[0]+i, row[1], row[2], row[3], row[4]]) # frame-level annotation
             csvwriter.writerow([row[0] + i, 0, 0, 0, 0])  # only onset annotation
         fp.close()
-    # print(file, _num_frames)
-    # break
 
     return
 
-
-# 58421_01_
-
 def generate_csvs_windowed(nsecs):
-    conf_matrix = np.zeros((2, 2, 4, 4)) # parent/child x annotator A/B x A's construct x B's constrcut
+    conf_matrix = np.zeros((2, 2, 4, 4)) # parent/child x annotator A/B x A's construct x B's construct
     disagreement_prop = [[], []]
 
     for fid, filename in enumerate(root_name):
-        # print('-' * 20)
-        # print(filename)
-        # print('-' * 20)
 
         nsec_frames = frame_rates[fid] * nsecs
 
-        csv_file1 = os.path.join(ind_csv_path, filename + '_CB45_BO_CM.csv')
-        csv_file2 = os.path.join(ind_csv_path, filename + '_DB45_BO_KH.csv')
+        # csv_file1 = os.path.join(ind_csv_path, filename + '_CB45_BO_CM.csv')
+        # csv_file2 = os.path.join(ind_csv_path, filename + '_DB45_BO_KH.csv')
 
-        # csv_file1 = './sample1.csv'
-        # csv_file2 = './sample_w9.csv'
+        csv_file1 = os.path.join(ind_csv_path, filename + '_CM.csv')
+        csv_file2 = os.path.join(ind_csv_path, filename + '_KH.csv')
+
 
         ann1 = genfromtxt(csv_file1, delimiter=',', skip_header=True).astype(np.int32)
         ann2 = genfromtxt(csv_file2, delimiter=',', skip_header=True).astype(np.int32)
-        # ann2 = np.zeros(ann1.shape)
 
         rating_pos1 = np.where(np.sum(ann1[:, 1:], axis=1) > 0)[0]  # get annotated frame indices
         rating_pos2 = np.where(np.sum(ann2[:, 1:], axis=1) > 0)[0]
@@ -241,8 +237,18 @@ def generate_csvs_windowed(nsecs):
     #
     # del annotator1_all, annotator2_all
 
-    print('\n kappa window-{0}secs min-{1} \n \n mean-{2} \n \n max-{3} \n \n std-{4} \n \n'
-          .format(nsecs, np.nanmin(kappa, axis=0), np.nanmean(kappa, axis=0), np.nanmax(kappa, axis=0),
+    kappa_stats = np.around(np.concatenate((np.nanmean(kappa, axis=0).T, np.nanmin(kappa, axis=0).T, np.nanmax(kappa, axis=0).T,
+                  np.nanstd(kappa, axis=0).T), axis=1), 3) # rounding to 3 decimal places
+
+    weekly_csvwriter.writerow(['Child']+5*['\t']+['Parent'])
+    weekly_csvwriter.writerow(['Construct', 'Mean', 'Min', 'Max', 'Std', str(nsecs)+' secs', 'Mean', 'Min', 'Max', 'Std'])
+
+    for affect in range(kappa_stats.shape[0]):
+        _row = [constructs[affect]]+[kappa_stats[affect, 2*i] for i in range(0, 4)]+['\t']+[kappa_stats[affect, 2*i+1] for i in range(0, 4)]
+        weekly_csvwriter.writerow(_row) # even column indices are child
+    # odd column indices are parent
+
+    print('kappa stats \n Mean-{0}\n Min-{1}\n Max-{2}\n Std-{3}\n'.format(np.nanmean(kappa, axis=0), np.nanmin(kappa, axis=0), np.nanmax(kappa, axis=0),
                   np.nanstd(kappa, axis=0)))
 
     return disagreement_prop
@@ -250,27 +256,14 @@ def generate_csvs_windowed(nsecs):
 
 if __name__ == '__main__':
     generate_csvs(ann_files)
-    # root_name = ['123456_01']
     root_name = list(dict.fromkeys(root_name))
     win_len = 1
 
-    hist = []
-    wins = []
-    bar_width = 0.35
-    # plt.subplots()
-
-    # generate_csvs_windowed(1)
 
     for wid, win_len in enumerate(np.arange(0.5, 3, 0.5)):
         kappa = np.zeros((2,2,4))
-        # print('-' * 20)
-        # print('window duration-{0:.4f} sec'.format(win_len))
-        # print('-' * 20)
+        weekly_csvwriter.writerow(['\n'])
         generate_csvs_windowed(win_len)
-        wins.append(win_len)
 
-# 	plt.bar(np.arange(len(wins)), hist[wid][0], color='b', label='CM wrt KH')
-# 	plt.bar(np.arange(len(wins))+bar_width, hist[wid][1], color='b', label='KH wrt CM')
-#
-# plt.legend()
-# plt.show()
+    weekly_csvwriter.writerow(['* Cohen\'s Kappa'])
+    fp_weekly.close()
