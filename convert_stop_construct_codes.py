@@ -21,8 +21,12 @@ win_csv_path = os.path.abspath('windowed_annotations')
 
 # TODO uncomment for weekly analysis
 _ann_files = os.listdir(stop_construct_path)#[8:-3]
-week_files = ['1020862', '1007091', '1007092', '1028622']
-ann_files = [x if x.split('_')[0] in week_files else None for x in _ann_files]
+# week_files = ['1011421','1011422','1031141', '1031142']
+# week_files = ['1020862', '1007091', '1007092', '1028622']
+week_files = ['1028621', '1049091','1049092']
+ann_files = [x if x.split('_')[0] in week_files else None for x in _ann_files] # real
+# ann_files = [x if x.split('_')[0] in week_files else None for x in _ann_files] # test data
+
 ann_files = list(filter(lambda x:x!=None, ann_files))
 fp_weekly = open('TPOT_weekly_report_'+datetime.today().strftime('%Y_%m_%d')+'.csv', 'w')
 weekly_csvwriter = csv.writer(fp_weekly)
@@ -92,8 +96,10 @@ def generate_csvs(ann_files):
         for ele in _vid_file[1:]:
             vid_file = vid_file + '_' + ele
         if file.endswith('CM.txt'):
-            csv_fp = open(os.path.join(ind_csv_path, filename[0] + '_' + filename[1] + '_CM.csv'), 'w')
+            # csv_fp = open(os.path.join(ind_csv_path, filename[0] + '_' + filename[1] + '_CB45_BO_CM.csv'), 'w') # test data
+            csv_fp = open(os.path.join(ind_csv_path, filename[0] + '_' + filename[1] + '_CM.csv'), 'w') # real data
         else:
+            # csv_fp = open(os.path.join(ind_csv_path, filename[0] + '_' + filename[1] + '_DB45_BO_KH.csv'), 'w')
             csv_fp = open(os.path.join(ind_csv_path, filename[0] + '_' + filename[1] + '_KH.csv'), 'w')
 
         csvwriter = csv.writer(csv_fp)
@@ -146,17 +152,17 @@ def generate_csvs(ann_files):
     return
 
 def generate_csvs_windowed(nsecs):
-    conf_matrix = np.zeros((2, 2, 4, 4)) # parent/child x annotator A/B x A's construct x B's construct
+    conf_matrix = np.zeros((2, 2, 4, 4)) # child/parent x annotator A/B x A's construct x B's construct
     disagreement_prop = [[], []]
 
     for fid, filename in enumerate(root_name):
 
         nsec_frames = frame_rates[fid] * nsecs
 
-        # csv_file1 = os.path.join(ind_csv_path, filename + '_CB45_BO_CM.csv')
+        # csv_file1 = os.path.join(ind_csv_path, filename + '_CB45_BO_CM.csv') # test data
         # csv_file2 = os.path.join(ind_csv_path, filename + '_DB45_BO_KH.csv')
-
-        csv_file1 = os.path.join(ind_csv_path, filename + '_CM.csv')
+        #
+        csv_file1 = os.path.join(ind_csv_path, filename + '_CM.csv') # real data
         csv_file2 = os.path.join(ind_csv_path, filename + '_KH.csv')
 
 
@@ -229,7 +235,6 @@ def generate_csvs_windowed(nsecs):
         else:
             np.savez('./graph_data/tpot/tpot_Parent_kappa' + str(float(nsecs)), kappa[1, ...])
     # break
-    # print('{0} {1}sec conf_matrix-{2} \n '.format(char, WINDOW, conf_matrix))
     # print(kappa)
 
     # afc_score = cal_2afc(annotator1_all, annotator2_all)
@@ -247,6 +252,16 @@ def generate_csvs_windowed(nsecs):
         _row = [constructs[affect]]+[kappa_stats[affect, 2*i] for i in range(0, 4)]+['\t']+[kappa_stats[affect, 2*i+1] for i in range(0, 4)]
         weekly_csvwriter.writerow(_row) # even column indices are child
     # odd column indices are parent
+
+    for char in range(2):
+        print('{0} {1}sec conf_matrix-{2} \n '.format(char, nsecs, conf_matrix[char, ...]))
+        weekly_csvwriter.writerow(['A wrt B']+3*['\t']+ ['B wrt A'])
+
+    for con in range(len(constructs)):
+        weekly_csvwriter.writerow(list(conf_matrix[0, 0, con, :])+list(conf_matrix[0, 1, con, :]))
+
+    for con in range(len(constructs)):
+        weekly_csvwriter.writerow(list(conf_matrix[1, 0, con, :]) + list(conf_matrix[1, 1, con, :]))
 
     print('kappa stats \n Mean-{0}\n Min-{1}\n Max-{2}\n Std-{3}\n'.format(np.nanmean(kappa, axis=0), np.nanmin(kappa, axis=0), np.nanmax(kappa, axis=0),
                   np.nanstd(kappa, axis=0)))

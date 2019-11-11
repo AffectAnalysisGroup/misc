@@ -2,11 +2,14 @@ import csv, os, pdb
 import cv2
 import numpy as np
 
-# server_dir = '/run/user/1435715183/gvfs/smb-share:server=istanbul.psychology.pitt.edu,share=raw_data/'
 
-server_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=projects/BP4D++/FACS/OCC/ELAN Projects/Exported'
-video_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=rawdata/BP4D++/Video_Data/mjpeg_FACS only'
-out_dir = './BP4D++_occ_reliability/'
+# server_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=projects/BP4D++/FACS/OCC/ELAN Projects/Exported'
+server_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=projects/FACS_Reliability Training/OCC/2019/AS/exported files/'
+
+# video_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=rawdata/BP4D++/Video_Data/mjpeg_FACS only'
+video_dir = '/run/user/1435715183/gvfs/smb-share:server=istanbul.psychology.pitt.edu,share=raw_data/SUNY-2/Video_Data/xvid/'
+
+out_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=projects/FACS_Reliability Training/OCC/2019/reliability_inputs/'
 
 frame_level_info = []
 # _fps = 30
@@ -17,7 +20,7 @@ allowed_aus = list(range(0, 21))+[22, 23, 24]+list(range(27, 40))+[99]
 allowed_aus[0] = 1
 
 for _csv in os.listdir(server_dir):
-    if _csv.endswith('.csv') and 'Test' not in _csv:
+    if _csv.endswith('.csv') and 'Test' not in _csv:# and _csv not in ['F012_14_DB27_EE_AS.csv', 'F038_14_DB27_EE_AS.csv']:
         vid_file1 = _csv.split('_')[0]+'_'+_csv.split('_')[1]+'.avi'
         vid_file2 = _csv.split('_')[0] + '_' + _csv.split('_')[1] +'-MJPG'+'.avi'
         with open(os.path.join(server_dir, _csv), 'r') as fp:
