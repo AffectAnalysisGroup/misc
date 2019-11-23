@@ -10,7 +10,9 @@ from reliability_emo_onset import calculate_kappa, cal_2afc
 constructs = ['Aggressive', 'Dysphoric', 'Positive', 'Other']
 
 root_dir = '/run/user/1435715183/gvfs/smb-share:server=istanbul.psychology.pitt.edu,share=raw_data/TPOT'
-video_dir = os.path.join(root_dir, 'Video_Data/CameraA/converted')
+video_dir = os.path.join(root_dir, 'Video_Data/CameraA/20191111_Converted/')
+output_csv_dir = os.path.join(root_dir, 'LIFE/')
+
 # stop_construct_path = os.path.join(root_dir, 'LIFE', 'LIFE Coding Stop Frame Constructs/Reliability testing/TXT Files')
 stop_construct_path = os.path.join(root_dir, 'LIFE', 'LIFE Coding Stop Frame Constructs/PSI Task/TXT Files')
 ind_csv_path = os.path.abspath('independent_annotations')
@@ -23,12 +25,15 @@ win_csv_path = os.path.abspath('windowed_annotations')
 _ann_files = os.listdir(stop_construct_path)#[8:-3]
 # week_files = ['1011421','1011422','1031141', '1031142']
 # week_files = ['1020862', '1007091', '1007092', '1028622']
-week_files = ['1028621', '1049091','1049092']
+# week_files = ['1028621', '1049091','1049092']
+# week_files = ['1008131', '1008132', '1036281', '1036282'] # comment here
+week_files = ['1022441', '1022442', '1076261', '1076262']
+
 ann_files = [x if x.split('_')[0] in week_files else None for x in _ann_files] # real
 # ann_files = [x if x.split('_')[0] in week_files else None for x in _ann_files] # test data
 
 ann_files = list(filter(lambda x:x!=None, ann_files))
-fp_weekly = open('TPOT_weekly_report_'+datetime.today().strftime('%Y_%m_%d')+'.csv', 'w')
+fp_weekly = open(os.path.join(output_csv_dir, 'TPOT_weekly_report_'+datetime.today().strftime('%Y_%m_%d')+'.csv'), 'w')
 weekly_csvwriter = csv.writer(fp_weekly)
 
 _header = [0, 82, 83, 84, 85]
@@ -258,10 +263,11 @@ def generate_csvs_windowed(nsecs):
         weekly_csvwriter.writerow(['A wrt B']+3*['\t']+ ['B wrt A'])
 
     for con in range(len(constructs)):
-        weekly_csvwriter.writerow(list(conf_matrix[0, 0, con, :])+list(conf_matrix[0, 1, con, :]))
+        weekly_csvwriter.writerow(list(conf_matrix[0, 0, con, :])+list(' ')+list(conf_matrix[0, 1, con, :]))
 
+    weekly_csvwriter.writerow(list('\n'))
     for con in range(len(constructs)):
-        weekly_csvwriter.writerow(list(conf_matrix[1, 0, con, :]) + list(conf_matrix[1, 1, con, :]))
+        weekly_csvwriter.writerow(list(conf_matrix[1, 0, con, :]) +list(' ')+ list(conf_matrix[1, 1, con, :]))
 
     print('kappa stats \n Mean-{0}\n Min-{1}\n Max-{2}\n Std-{3}\n'.format(np.nanmean(kappa, axis=0), np.nanmin(kappa, axis=0), np.nanmax(kappa, axis=0),
                   np.nanstd(kappa, axis=0)))
