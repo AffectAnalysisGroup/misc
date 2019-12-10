@@ -1,11 +1,12 @@
 from sklearn import svm
 from sklearn.model_selection import StratifiedKFold, GridSearchCV, train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import confusion_matrix, accuracy_score, roc_auc_score, classification_report
+from sklearn.metrics import confusion_matrix, accuracy_score, roc_auc_score, classification_report, cohen_kappa_score, f1_score, make_scorer
 import numpy as np
 
 np.random.seed(1983)
-
+import warnings
+warnings.filterwarnings('ignore')
 
 # def split_data(data, labels, train_val_test=False, nfolds=3):
 #
@@ -37,18 +38,36 @@ class Classifier:
         self.basic_model = basic_model
 
         if parameters is not None:
-            self.c_range = parameters['c_range']
-            self.gamma_range = parameters['g_range']
+            self.c_range = np.logspace(-2, 0.1, parameters['c_range'])
+            self.gamma_range = np.logspace(-2, 0.1,parameters['g_range'])
         else:
-            self.c_range = 13
-            self.gamma_range = 13
+            self.c_range = np.logspace(-2, 0.1, 13)
+            self.gamma_range = np.logspace(-2, 0.1, 13)
 
-        self.parameters = {'kernel': ('linear', 'rbf'), 'C': np.logspace(-2, 10, self.c_range), 'gamma':np.logspace(-9, 3, self.gamma_range)}
+        self.parameters = {'kernel': ('linear', 'rbf'), 'C': self.c_range, 'gamma':self.gamma_range}
 
-    def normalize(self, data, labels):
+        kappa = make_scorer(cohen_kappa_score)
+        acc = make_scorer(accuracy_score)
+        f1 = make_scorer(f1_score)
+        auc = make_scorer(roc_auc_score, needs_proba=True)
+        def tn(y_true, y_pred): return confusion_matrix(y_true, y_pred)[0, 0]
+        def fp(y_true, y_pred): return confusion_matrix(y_true, y_pred)[0, 1]
+        def fn(y_true, y_pred): return confusion_matrix(y_true, y_pred)[1, 0]
+        def tp(y_true, y_pred): return confusion_matrix(y_true, y_pred)[1, 1]
+
+        self.scores = {'kappa':kappa, 'acc':acc, 'f1':f1, 'auc':auc, 'tp':make_scorer(tp), 'fp':make_scorer(fp)
+            , 'tn':make_scorer(tn), 'fn':make_scorer(fn)}
+
+    def normalize(self, data, labels, print_dist = False):
 
         self.data = np.array(data)
         self.labels = np.array(labels)
+        self.labels_dist = []
+
+        if print_dist:
+            for lab in np.unique(self.labels):
+                self.labels_dist.append(len(np.where(self.labels==lab)[0])/len(self.labels))
+            print('data distribution-', self.labels_dist)
 
         scaler = StandardScaler()
         scaler.fit_transform(self.data)
@@ -87,12 +106,15 @@ class Classifier:
 
             return train, test
 
-    def classify_and_predict(self, folds=3, grid_verbose=True, njobs=-1):
+    def classify_and_predict(self, folds=3, optimize_for = 'auc', grid_verbose=True, njobs=-1):
 
-        self.model = GridSearchCV(self.basic_model, self.parameters, cv=folds, verbose=grid_verbose, n_jobs=njobs)
+        self.model = GridSearchCV(self.basic_model, self.parameters, cv=folds, verbose=grid_verbose
+                                  , n_jobs=njobs, refit=optimize_for, scoring=self.scores)
         print('Training GridSearch based SVM')
         self.model.fit(self.train[0], self.train[1])
         # TODO pick the best model to predict
+        # 	best_idx = model.model.best_index_
+        # 	results = model.model.cv_results_
         self.probs = self.model.predict_proba(self.test[0])
         self.pred = self.model.predict(self.test[0])
 
@@ -104,5 +126,7 @@ class Classifier:
         F_measure = classification_report(self.test[1], self.pred, output_dict=True)
         conf_matrix = confusion_matrix(self.test[1], self.pred)
         auc = roc_auc_score(self.test[1], self.probs[:, -1])
+        kappa = cohen_kappa_score(self.pred, self.test[1])
+        print('best parameters-', self.model.best_params_)
 
-        return {'accuracy':acc, 'f1':F_measure, 'confusion':conf_matrix, 'auc':auc}
+        return {'accuracy':acc, 'f1':F_measure, 'confusion':conf_matrix, 'auc':auc, 'kappa':kappa}

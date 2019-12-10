@@ -27,8 +27,8 @@ _ann_files = os.listdir(stop_construct_path)#[8:-3]
 # week_files = ['1020862', '1007091', '1007092', '1028622']
 # week_files = ['1028621', '1049091','1049092']
 # week_files = ['1008131', '1008132', '1036281', '1036282'] # comment here
-week_files = ['1022441', '1022442', '1076261', '1076262']
-
+# week_files = ['1022441', '1022442', '1076261', '1076262']
+week_files = ['1021061', '1021062', '1026181', '1026182', '1047171', '1047172']
 ann_files = [x if x.split('_')[0] in week_files else None for x in _ann_files] # real
 # ann_files = [x if x.split('_')[0] in week_files else None for x in _ann_files] # test data
 

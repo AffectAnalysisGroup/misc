@@ -10,21 +10,35 @@ import pandas as pd
 from sklearn import svm
 from model_def import Classifier
 
+import warnings
+warnings.filterwarnings('ignore')
+
 bigram_mapping_ = bigram_mapping()
 trigram_mapping_ = trigram_mapping()
+LAG_LIMIT = 7
+LAG_ANALYSIS = True
 
+# families that did not consent; IDs in ORI's notation
+non_consent = ['0757', '0825', '1487', '1666', '2620', '2630', '2643', '4181', '5075', '5701', '9785']
+# revisted families may begin with 10XXXX or 11XXXX but only 11XXXX should be considered
+revisited_ids = ['0167', '0537', '0568', '0606', '0609','0788','0906', '1053', '1118']
 data = np.load('../../panam/Life Code Ground Truth/life_affect+content.npy', allow_pickle=True).item()
-data['family'] = [int('10'+fid) for fid in data['family']]
+# remove unconsented families and consider the revisted families
+data['family'] = [int('11'+fid) if fid in revisited_ids else int('10'+fid) for fid in data['family'] if fid not in non_consent]
 
 classification_data_trigram = []
 classification_data_bigram = []
 bigram_histogram_all_families = np.zeros(len(bigram_mapping_.keys()))
 trigram_histogram_all_families = np.zeros(len(trigram_mapping_.keys()))
 
-df = pd.read_csv('/home/mab623/panam/2019.8.7_Multimodal TPOT Data.csv', usecols = ['FamId', 'M_3L1TOT', 'GROUP'])
+df = pd.read_csv('/home/mab623/panam/2019.8.7_Multimodal TPOT Data.csv', usecols = ['FamId', 'M_3L1TOT', 'GROUP'], dtype={'M_3L1TOT':np.float32})
 fam_phq_group = df.to_numpy()[:169]
 
+df = pd.read_excel('/home/mab623/panam/2019.10.23_TPOTDepressionScoresInventoryKW.xlsx', usecols = ['TPOT FamId', 'Lag between Mother PH9Q and Visit Date'])
+tpot_lag = df.to_numpy()[:169]
 # bigram transitions
+
+lag_families = tpot_lag[np.intersect1d(np.where(-1*LAG_LIMIT <= tpot_lag[:, 1]), np.where(tpot_lag[:, 1]<=LAG_LIMIT)), :]
 
 def sanity_check():
 	'''
@@ -146,11 +160,40 @@ def calculate_trigram_histogram(families, depressed_families, depression_labels=
 
 if __name__ == '__main__':
 	# sanity_check()
-	depressed_families = np.squeeze(fam_phq_group[np.where(fam_phq_group[:, -2]==1), 0].astype(np.int32))
+	# depressed_families = np.squeeze(fam_phq_group[np.where(fam_phq_group[:, -2]==1), 0].astype(np.int32))
+	# depressed_families = np.squeeze(fam_phq_group[np.where(fam_phq_group[:, 2]>=10), 0].astype(np.int32))
 	# depressed_families = get_depressed_families()
 	families = np.unique(np.array(data['family']))
 
-	print('Families from sds file-{0} and csv-{1}'.format(len(families), len(fam_phq_group)))
+	# get families in lag
+	if LAG_ANALYSIS:
+		families_del_idx = []
+		fam_phq_group_del_idx = []
+		for fid, fam in enumerate(families):
+			# pdb.set_trace()
+			if fam not in lag_families[:, 0]:
+				# np.delete(families, np.where(families==fam))
+				# np.delete(fam_phq_group, np.where(fam_phq_group[:, 0]==str(fam)), axis=0)
+				families_del_idx.append(fid)
+		for fam in fam_phq_group[:, 0]:
+			if int(fam) not in lag_families[:, 0]:
+				fam_phq_group_del_idx.append(np.where(fam_phq_group[:, 0]==str(fam))[0])
+
+		families = np.delete(families, families_del_idx)
+		fam_phq_group = np.delete(fam_phq_group, fam_phq_group_del_idx, axis=0)
+
+	# depressed_families = np.squeeze(fam_phq_group[np.where(fam_phq_group[:, -2]==1), 0].astype(np.int32))
+	'''
+	There are families without history of depression that have PHQ>10, so we remove them
+	'''
+	depressed_families = np.squeeze(fam_phq_group[np.intersect1d(np.where(fam_phq_group[:, 2]>=10), np.where(fam_phq_group[:, -2]==1)), 0].astype(np.int32))
+
+	print('remaining families after lag consideration {1} depressed {1}/{2}'.format(LAG_LIMIT, len(depressed_families)
+																						, len(families)))
+
+	print(len(fam_phq_group))
+	assert len(fam_phq_group) == len(families), 'Number of Families in csv and sds do not match for this criteria'
+	# print('Families from sds file-{0} and csv-{1}'.format(len(families), len(fam_phq_group)))
 
 	count = 0
 	for fam in families:
@@ -180,11 +223,6 @@ if __name__ == '__main__':
 	print('histogram stats max-{0} max_construct-{1} min-{2} min_construct-{3} mean-{4} mean_construct-{5}'
 		.format(_max, _max_con, _min, _min_con, _mean, _mean_con))
 
-	# with open('temp.csv', 'w') as fp:
-	# 	csvwriter = csv.writer(fp)
-	# 	for transistion, hist_idx in trigram_mapping_.items():
-	# 		csvwriter.writerow([str(transistion), histogram[hist_idx]])
-
 	_sorted_dist = np.flip(np.sort(_stat_mat)) # flipped to descending order
 	_sorted_con = []
 
@@ -204,22 +242,42 @@ if __name__ == '__main__':
 	# 	pickle.dump(classification_data_bigram, fp)
 
 # TODO finish the classifier part
-	basic_model = svm.SVC(probability=True)
+	basic_model = svm.SVC(probability=True,class_weight='balanced')
 	model = Classifier(basic_model)
-	model.normalize(bigram_data, bigram_labels)
-	model.split_data()
-	model.classify_and_predict()
+	model.normalize(bigram_data, bigram_labels, print_dist=True)
+	model.split_data(nfolds=5)
+	model.classify_and_predict(optimize_for='auc', grid_verbose=False, njobs=-1, folds=5)
 	metrics = model.metrics()
+
+	# below are the validation metrics
+	best_idx = model.model.best_index_
+	results = model.model.cv_results_
+	conf_matrix = np.array([[results['mean_test_tn'][best_idx], results['mean_test_fp'][best_idx]], [results['mean_test_fn'][best_idx], results['mean_test_tp'][best_idx]]])
+	# print('scores for bigrams kappa-{0:.3f}+-{1:.3f} acc-{2:.3f}+-{3:.3f} f1-{4:.3f}+-{5:.3f} auc-{6:.3f}+-{7:.3f} conf-{8}'.format(results['mean_test_kappa'][best_idx],
+	# 	   results['std_test_kappa'][best_idx], results['mean_test_acc'][best_idx], results['std_test_acc'][best_idx], results['mean_test_f1'][best_idx],
+	# 				   							results['std_test_f1'][best_idx], results['mean_test_auc'][best_idx], results['std_test_auc'][best_idx], conf_matrix))
+
+	# these are test metrics
 	print(metrics)
+	# print('scores for bigrams kappa-{0:.3f} acc-{1:.3f} f1-{2:.3f} auc-{3:.3f} conf-{4}'.format(metrics['kappa'], metrics['accuracy'], metrics['f1'], metrics['auc'], metrics['confusion']))
+
 
 	model = Classifier(basic_model)
 	model.normalize(trigram_data, trigram_labels)
-	model.split_data()
-	model.classify_and_predict()
+	model.split_data(nfolds=5)
+	model.classify_and_predict(optimize_for='auc', grid_verbose=False, njobs=-1, folds=5)
 	metrics = model.metrics()
+
+	# below are the validation metrics
+	best_idx = model.model.best_index_
+	results = model.model.cv_results_
+	conf_matrix = np.array([[results['mean_test_tn'][best_idx], results['mean_test_fp'][best_idx]], [results['mean_test_fn'][best_idx], results['mean_test_tp'][best_idx]]])
+	# print('scores for trigrams kappa-{0:.3f}+-{1:.3f} acc-{2:.3f}+-{3:.3f} f1-{4:.3f}+-{5:.3f} auc-{6:.3f}+-{7:.3f} conf-{8}'.format(
+	# 	results['mean_test_kappa'][best_idx],
+	# 	results['std_test_kappa'][best_idx], results['mean_test_acc'][best_idx], results['std_test_acc'][best_idx],
+	# 	results['mean_test_f1'][best_idx],
+	# 	results['std_test_f1'][best_idx], results['mean_test_auc'][best_idx], results['std_test_auc'][best_idx], conf_matrix))
+
+	# these are test metrics
 	print(metrics)
-
-
-# pdb.set_trace()
-	# with open('trigram_data', 'rb') as fp:
-	# 	a = pickle.load(fp)
+	# print('scores for bigrams kappa-{0:.3f} acc-{1:.3f} f1-{2:.3f} auc-{3:.3f} conf-{4}'.format(metrics['kappa'], metrics['f1'], metrics['auc'], metrics['confusion']))
