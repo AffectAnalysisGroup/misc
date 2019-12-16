@@ -2,8 +2,8 @@ import csv, os, pdb
 import cv2
 import numpy as np
 
-# server_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=projects/BP4D++/FACS/OCC/ELAN Projects/Exported'
-server_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=projects/FACS_Reliability Training/OCC/2019/AS/Tobeconverted/2019.11.19/'
+server_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=projects/FACS_Reliability Training/OCC/2019/AS/exported files'
+# server_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=projects/FACS_Reliability Training/OCC/2019/AS/Tobeconverted/2019.11.19/'
 
 video_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=rawdata/BP4D++/Video_Data/mjpeg_FACS only'
 # video_dir = '/run/user/1435715183/gvfs/smb-share:server=terracotta.psychology.pitt.edu,share=rawdata/SUNY-2/Video_Data/mjpeg_FACS only/'
@@ -32,6 +32,7 @@ for _csv in os.listdir(server_dir):
             elif vid_file2 in os.listdir(video_dir):
                 vid_file = vid_file2
             else:
+                print(vid_file, vid_file2, vid_file1, _csv)
                 raise FileNotFoundError
 
             _ret = vcap.open(os.path.join(video_dir, vid_file))
@@ -50,9 +51,15 @@ for _csv in os.listdir(server_dir):
             out_csv = np.append(np.reshape(range(1, int(_dur_*_fps)+1), (-1, 1)), out_csv, axis=1)
 
             for line in csvreader:
-                if 'Coding' not in line:
+                if 'Coding' not in line and 'Occlusion' not in line:
                     AU, _start, _stop  = (int(line[0].split(' ')[1]), float(line[2]), float(line[3]))
                     out_csv[int(_start*_fps):int(_stop*_fps), allowed_aus.index(AU)] = 1
+                elif 'Occlusion' in line:
+                    AU, _start, _stop = (99, float(line[2]), float(line[3]))
+                    out_csv[int(_start * _fps):int(_stop * _fps), allowed_aus.index(AU)] = 1
+                else:
+                    pass
+
 
         # out_csv[0, 0] = 1 # setting the header (0, 0) to 1 for reliability software
         with open(os.path.join(out_dir, _csv), 'w') as fp:

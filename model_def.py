@@ -1,7 +1,7 @@
 from sklearn import svm
 from sklearn.model_selection import StratifiedKFold, GridSearchCV, train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import confusion_matrix, accuracy_score, roc_auc_score, classification_report, cohen_kappa_score, f1_score, make_scorer
+from sklearn.metrics import confusion_matrix, balanced_accuracy_score, roc_auc_score, classification_report, cohen_kappa_score, f1_score, make_scorer
 import numpy as np
 
 np.random.seed(1983)
@@ -44,12 +44,15 @@ class Classifier:
             self.c_range = np.logspace(-2, 0.1, 13)
             self.gamma_range = np.logspace(-2, 0.1, 13)
 
+        # self.c_range = [0, 1]
+        # self.gamma_range = [0, 1]
+
         self.parameters = {'kernel': ('linear', 'rbf'), 'C': self.c_range, 'gamma':self.gamma_range}
 
         kappa = make_scorer(cohen_kappa_score)
-        acc = make_scorer(accuracy_score)
+        acc = make_scorer(balanced_accuracy_score)
         f1 = make_scorer(f1_score)
-        auc = make_scorer(roc_auc_score, needs_proba=True)
+        auc = make_scorer(roc_auc_score, average='weighted', needs_proba=True)
         def tn(y_true, y_pred): return confusion_matrix(y_true, y_pred)[0, 0]
         def fp(y_true, y_pred): return confusion_matrix(y_true, y_pred)[0, 1]
         def fn(y_true, y_pred): return confusion_matrix(y_true, y_pred)[1, 0]
@@ -122,10 +125,14 @@ class Classifier:
 
     def metrics(self):
 
-        acc = accuracy_score(self.test[1], self.pred)
+
+        # acc and auc are weighted based on the inverse prevalence of each class
+        # weighted F1 is chosen from the report?
+        print('GT distribution-', np.where(self.test[1]==0)[0].shape, np.where(self.test[1]==1)[0].shape)
+        acc = balanced_accuracy_score(self.test[1], self.pred)
         F_measure = classification_report(self.test[1], self.pred, output_dict=True)
         conf_matrix = confusion_matrix(self.test[1], self.pred)
-        auc = roc_auc_score(self.test[1], self.probs[:, -1])
+        auc = roc_auc_score(self.test[1], self.probs[:, -1], average='weighted')
         kappa = cohen_kappa_score(self.pred, self.test[1])
         print('best parameters-', self.model.best_params_)
 
